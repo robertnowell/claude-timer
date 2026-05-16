@@ -1,7 +1,7 @@
 {
   "name": "claude-timer",
-  "version": "1.0.0",
-  "description": "Named countdown timers for Claude Code on macOS. Background workers fire Glass-sound + system notification when they expire. Manage with start/list/cancel.",
+  "version": "1.1.0",
+  "description": "macOS sound + notification capability for Claude Code. Fire immediately (notify) to alert the user when a long task finishes, or run named countdown timers (start/list/cancel) for pomodoros and reminders.",
   "author": {
     "name": "Robert Nowell"
   },

@@ -179,6 +179,21 @@ def cmd_list(args) -> int:
     return 0
 
 
+def cmd_notify(args) -> int:
+    """Fire sound + notification immediately. No countdown."""
+    label = args.message or "Notification"
+    sound_file = "/System/Library/Sounds/Glass.aiff"
+    if Path(sound_file).exists():
+        subprocess.Popen(
+            ["afplay", sound_file],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    fire_notification(label)
+    print(f"Notified: {label}")
+    return 0
+
+
 def cmd_cancel(args) -> int:
     state = prune(load_state())
     target = args.target
@@ -229,6 +244,10 @@ def main() -> int:
     p_cancel = sub.add_parser("cancel", help="cancel a timer by id or label substring")
     p_cancel.add_argument("target")
     p_cancel.set_defaults(func=cmd_cancel)
+
+    p_notify = sub.add_parser("notify", help="fire sound + notification immediately (no countdown)")
+    p_notify.add_argument("message", help="message to display")
+    p_notify.set_defaults(func=cmd_notify)
 
     args = p.parse_args()
     return args.func(args)

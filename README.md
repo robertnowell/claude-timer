@@ -1,11 +1,14 @@
-[![Version](https://img.shields.io/badge/version-1.0.0-blue)](https://github.com/robertnowell/claude-timer)
+[![Version](https://img.shields.io/badge/version-1.1.0-blue)](https://github.com/robertnowell/claude-timer)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Claude Code Skill](https://img.shields.io/badge/Claude_Code-Skill-blueviolet)](https://docs.anthropic.com/en/docs/claude-code/skills)
 [![macOS](https://img.shields.io/badge/macOS-only-lightgrey)](https://www.apple.com/macos)
 
 # Claude Timer
 
-Named countdown timers for Claude Code on macOS. Glass-sound + system notification when they fire. Survives Claude restarts.
+macOS sound + notification capability for Claude Code. Two modes:
+
+- **`notify`** — fires sound + notification *immediately*. Claude reaches for this on its own when finishing a long-running task and the user may have stepped away.
+- **`start` / `list` / `cancel`** — named countdown timers. User reaches for these for pomodoros, reminders, and "ping me in 25 minutes."
 
 > Zero external dependencies. Built on `afplay` and `osascript` — both ship with macOS.
 
@@ -34,23 +37,30 @@ cancel the pomodoro
 
 ## Commands
 
-The skill exposes one script — `timer.py` — with three subcommands.
+The skill exposes one script — `timer.py` — with four subcommands.
 
 | Command | What it does |
 |---|---|
-| `start <duration> [label]` | Spawns a detached background worker that sleeps `<duration>`, then fires Glass sound + system notification |
-| `list` | Shows id, label, remaining time, start time for all active timers; auto-prunes dead workers |
-| `cancel <id-or-label>` | Numeric → cancel by id. Non-numeric → case-insensitive substring match on labels. Kills the worker's process group |
+| `notify <message>` | Fires Glass sound + system notification immediately. No countdown. For "long task done" pings. |
+| `start <duration> [label]` | Spawns a detached background worker that sleeps `<duration>`, then fires Glass sound + system notification. |
+| `list` | Shows id, label, remaining time, start time for all active timers; auto-prunes dead workers. |
+| `cancel <id-or-label>` | Numeric → cancel by id. Non-numeric → case-insensitive substring match on labels. Kills the worker's process group. |
 
 **Duration formats:** `25m`, `90s`, `1h30m`, `2h`, or raw seconds.
 
 **Intent mapping** (when invoked through Claude):
 
+*User-initiated:*
 - "set a timer for 25 minutes" → `start 25m`
 - "remind me in 1 hour to check the laundry" → `start 1h "check the laundry"`
 - "start a pomodoro" → `start 25m "pomodoro"`
 - "what timers are running" → `list`
 - "cancel the pomodoro" → `cancel pomodoro`
+
+*Claude-initiated (the more interesting case):*
+- Long task just finished → `notify "deep-research done — report in chat"`
+- Build / deploy / render completed → `notify "build succeeded"` or `notify "render failed at angle B"`
+- Approval checkpoint reached after long work → `notify "ready for your review"`
 
 ## How it fires
 

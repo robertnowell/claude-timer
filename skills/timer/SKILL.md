@@ -1,18 +1,37 @@
 ---
 name: timer
-description: Set named countdown timers that fire macOS notifications when done. Manage active timers with list and cancel. Use when the user says "set a timer for X", "remind me in X minutes", "start a pomodoro", "what timers are running", "cancel my timer".
-argument-hint: "start <duration> [label] | list | cancel <id-or-label>"
+description: macOS sound + notification capability. Fire immediately (notify) to alert the user — useful when finishing a long task, completing a multi-step operation, or surfacing important state and the user may have stepped away. Also runs named countdown timers (start/list/cancel) for user-requested timers and pomodoros. Use proactively when ending a turn after long-running work; use on request when the user says "set a timer for X", "start a pomodoro", "what timers are running", "cancel my timer".
+argument-hint: "notify <message> | start <duration> [label] | list | cancel <id-or-label>"
 ---
 
 # Timer
 
-Manages named countdown timers as detached background processes. Each timer fires a macOS notification (Glass sound) when it expires. State persists in `~/.claude/timer/state.json` and survives across Claude sessions.
+A two-purpose skill:
+
+1. **Notification capability** — Claude can fire a Glass sound + macOS notification immediately to alert the user that something is done. Reach for this proactively whenever the user might have stepped away from the screen.
+2. **Countdown timers** — Named timers that run as detached background processes and fire the same sound + notification when they expire.
 
 Helper: `${CLAUDE_SKILL_DIR}/scripts/timer.py`. Always invoke with `python3`.
 
+## When Claude should reach for this proactively
+
+Without being asked. These are situations where the user is probably not watching the screen and would benefit from a ping:
+
+- A long-running task just finished (build > 30s, deploy, render, large refactor, anything where Claude was working for minutes).
+- A multi-step pipeline completed successfully or hit a blocker.
+- A background command Claude was waiting on returned.
+- A long-pending question or approval is now needed from the user.
+- Anything Claude has discovered or generated that the user should see immediately rather than scroll back to.
+
+Default behavior at the end of a turn that took > 1 minute of work: fire `notify` with a one-line summary. Cost is ~0.1s; benefit is the user actually sees the result when they look back.
+
 ## Commands
 
-**Start** — `python3 ${CLAUDE_SKILL_DIR}/scripts/timer.py start <duration> [label]`
+**Notify (immediate)** — `python3 ${CLAUDE_SKILL_DIR}/scripts/timer.py notify "<message>"`
+
+Fires Glass sound + macOS notification right now. No countdown. Use this for "task done" pings.
+
+**Start (countdown)** — `python3 ${CLAUDE_SKILL_DIR}/scripts/timer.py start <duration> [label]`
 
 - `duration`: `25m`, `90s`, `1h30m`, `2h`, or raw integer (seconds).
 - `label`: optional, default `"Timer"`. Quote multi-word labels.
@@ -28,6 +47,7 @@ Shows id, label, remaining time, and start time for every active timer. Dead PID
 
 ## Intent mapping
 
+User-initiated (the user says):
 - "set a timer for 25 minutes" → `start 25m`
 - "remind me in 1 hour to check the laundry" → `start 1h "check the laundry"`
 - "start a pomodoro" → `start 25m "pomodoro"`
@@ -35,7 +55,12 @@ Shows id, label, remaining time, and start time for every active timer. Dead PID
 - "cancel the pomodoro" → `cancel pomodoro`
 - "cancel timer 3" → `cancel 3`
 
-After starting a timer, print the script's output verbatim — it already confirms the id, label, and duration. No need to restate.
+Claude-initiated (you decide on your own):
+- Long task just finished → `notify "deep-research done — report in chat"` (or whatever summarizes what's ready)
+- Build/deploy/render completed → `notify "build succeeded"` or `notify "render failed at angle B"`
+- User-input checkpoint reached after long work → `notify "ready for your review"`
+
+After starting a timer or notifying, print the script's output verbatim — it already confirms the action. No need to restate.
 
 ## Notes
 
