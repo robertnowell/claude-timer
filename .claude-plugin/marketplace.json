@@ -1,0 +1,17 @@
+{
+  "name": "claude-timer-marketplace",
+  "owner": {
+    "name": "Robert Nowell"
+  },
+  "metadata": {
+    "description": "Named countdown timers for Claude Code on macOS"
+  },
+  "plugins": [
+    {
+      "name": "claude-timer",
+      "description": "Named countdown timers — start/list/cancel with sound + macOS notification on fire",
+      "category": "productivity",
+      "source": "./"
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "name": "claude-timer",
+  "version": "1.0.0",
+  "description": "Named countdown timers for Claude Code on macOS. Background workers fire Glass-sound + system notification when they expire. Manage with start/list/cancel.",
+  "author": {
+    "name": "Robert Nowell"
+  },
+  "homepage": "https://github.com/robertnowell/claude-timer",
+  "repository": "https://github.com/robertnowell/claude-timer",
+  "license": "MIT",
+  "keywords": ["timer", "pomodoro", "macos", "claude-skill", "claude-code"]
+}
