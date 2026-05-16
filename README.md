@@ -1,4 +1,4 @@
-[![Version](https://img.shields.io/badge/version-1.1.0-blue)](https://github.com/robertnowell/claude-timer)
+[![Version](https://img.shields.io/badge/version-1.2.0-blue)](https://github.com/robertnowell/claude-timer)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Claude Code Skill](https://img.shields.io/badge/Claude_Code-Skill-blueviolet)](https://docs.anthropic.com/en/docs/claude-code/skills)
 [![macOS](https://img.shields.io/badge/macOS-only-lightgrey)](https://www.apple.com/macos)
@@ -41,8 +41,8 @@ The skill exposes one script — `timer.py` — with four subcommands.
 
 | Command | What it does |
 |---|---|
-| `notify <message>` | Fires Glass sound + system notification immediately. No countdown. For "long task done" pings. |
-| `start <duration> [label]` | Spawns a detached background worker that sleeps `<duration>`, then fires Glass sound + system notification. |
+| `notify <message> [--context "<longer body>"]` | Fires Glass sound + system notification immediately + drops a `.txt` file in the Script Editor iCloud folder so clicking "Show" surfaces the message. Use `--context` for a longer body Claude can pass to explain why it fired. |
+| `start <duration> [label]` | Spawns a detached background worker that sleeps `<duration>`, then fires the same sound + notification + file-drop. |
 | `list` | Shows id, label, remaining time, start time for all active timers; auto-prunes dead workers. |
 | `cancel <id-or-label>` | Numeric → cancel by id. Non-numeric → case-insensitive substring match on labels. Kills the worker's process group. |
 
@@ -58,26 +58,32 @@ The skill exposes one script — `timer.py` — with four subcommands.
 - "cancel the pomodoro" → `cancel pomodoro`
 
 *Claude-initiated (the more interesting case):*
-- Long task just finished → `notify "deep-research done — report in chat"`
-- Build / deploy / render completed → `notify "build succeeded"` or `notify "render failed at angle B"`
-- Approval checkpoint reached after long work → `notify "ready for your review"`
+- Long task just finished → `notify "deep-research done" --context "Ranked 18 sources across 4 angles. Report is in the chat above; look for the 'Established' findings at the top."`
+- Build / deploy / render completed → `notify "build succeeded"` or `notify "render failed at angle B" --context "ElevenLabs TTS returned 503 three times. Worth retrying or switching providers."`
+- Approval checkpoint reached after long work → `notify "ready for your review" --context "The 3 angle thumbnails are rendered. I need you to pick one before I queue the long-form."`
 
 ## How it fires
 
-On expiry, the worker runs:
+On expiry (or `notify`), the worker:
 
-1. **`afplay /System/Library/Sounds/Glass.aiff` × 3** — always audible, never needs permission, bypasses DND.
-2. **`osascript display notification`** — visible if user has DND off and Script Editor has notification permission (most users do, granted long ago).
+1. **Writes a `.txt` file** to `~/Library/Mobile Documents/com~apple~ScriptEditor2/Documents/`. Filename is the message; body contains fire time, the cwd you launched from, a "switch back to your terminal" hint, and your `--context` paragraph if you supplied one. Auto-prunes to the 5 most-recent files so iCloud doesn't pile up.
+2. **`afplay /System/Library/Sounds/Glass.aiff` × 3** — always audible, never needs permission, bypasses DND.
+3. **`osascript display notification`** — visible if user has DND off and Script Editor has notification permission (most users do, granted long ago).
 
 State lives at `~/.claude/timer/state.json` so timers survive Claude restarts. Workers are detached via `start_new_session=True` — they fire even if you close Claude Code.
+
+### Why the file-drop trick
+
+osascript notifications inherit Script Editor's bundle id, which hardcodes the click target to its iCloud Documents folder. Rather than fight macOS, we treat that folder as the canvas: clicking "Show" on the notification opens Finder there, where your message file is the most recent entry. The filename IS the message. Open the file for the full body (cwd + return hint + Claude's context paragraph).
 
 ## Known limitations
 
 These are documented as accepted trade-offs rather than bugs to chase:
 
 - **macOS-only.** `afplay` and `osascript display notification` are macOS-native. No Linux/WSL fallback.
-- **Notifications get attributed to "Script Editor".** That's the osascript host's bundle. Clicking "Show" on the notification opens Script Editor's iCloud folder, not your terminal. (We tried fixing this with a custom AppleScript applet — macOS silently filters notifications from un-permitted apps with no programmatic way to grant permission. The sound is the reliable signal.)
-- **DND / Focus modes filter the notification.** Sound still plays.
+- **Notifications get attributed to "Script Editor".** That's the osascript host's bundle. We can't change this without a custom signed `.app` bundle that has its own notification permission — and there's no programmatic way to grant that on modern macOS. The file-drop trick above is the workaround.
+- **DND / Focus modes filter the visual notification.** Sound still plays, file still drops, you'll see it next time you click into Finder.
+- **macOS bundles consecutive notifications.** If you fire several `notify` calls in quick succession, macOS may stack them under the most recent one — expand the stack to see all.
 
 ## Install in Cowork (claude.ai, desktop)
 

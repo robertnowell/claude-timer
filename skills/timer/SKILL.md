@@ -27,9 +27,18 @@ Default behavior at the end of a turn that took > 1 minute of work: fire `notify
 
 ## Commands
 
-**Notify (immediate)** — `python3 ${CLAUDE_SKILL_DIR}/scripts/timer.py notify "<message>"`
+**Notify (immediate)** — `python3 ${CLAUDE_SKILL_DIR}/scripts/timer.py notify "<message>" [--context "<longer body>"]`
 
 Fires Glass sound + macOS notification right now. No countdown. Use this for "task done" pings.
+
+- `<message>`: short banner text (visible in the notification top-right).
+- `--context "<text>"`: optional longer body. When the user clicks "Show" on the notification, Finder opens to a folder containing a `.txt` file whose name is the message — and whose body contains: fire time, the cwd you launched from, "switch back to your terminal", and this `--context` text. Use `--context` to give the user one sentence of why this fired and what to do next.
+
+Example proactive use after a long task:
+
+```
+notify "deep-research done" --context "Ranked 18 sources across 4 angles. Report is in the chat above. Look for the 'Established' findings at the top."
+```
 
 **Start (countdown)** — `python3 ${CLAUDE_SKILL_DIR}/scripts/timer.py start <duration> [label]`
 

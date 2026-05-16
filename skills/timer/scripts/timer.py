@@ -91,8 +91,11 @@ def cmd_start(args) -> int:
     label = args.label or "Timer"
 
     worker = Path(__file__).resolve()
+    # Pass cwd through to the worker so the click-to-show file can show where
+    # the timer was set from (helps the user remember which project/session
+    # they were in when the timer eventually fires minutes later).
     proc = subprocess.Popen(
-        [sys.executable, str(worker), "_worker", str(duration_sec), label],
+        [sys.executable, str(worker), "_worker", str(duration_sec), label, os.getcwd()],
         start_new_session=True,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
@@ -113,20 +116,66 @@ def cmd_start(args) -> int:
     return 0
 
 
-def fire_notification(label: str) -> None:
-    """Best-effort visual notification. Sound is the reliable signal — fired separately.
+SE_DOCS_DIR = Path.home() / "Library/Mobile Documents/com~apple~ScriptEditor2/Documents"
+MESSAGE_PREFIX = "⏰ Timer · "
+MAX_MESSAGE_FILES = 5
 
-    Uses raw osascript `display notification`. The notification is attributed to
-    "Script Editor" (the osascript host's bundle id), so it inherits Script Editor's
-    notification permission — which most macOS users already have granted.
 
-    Tradeoffs accepted here (after burning many turns trying to do better):
-      - Clicking the notification opens Script Editor's iCloud folder, not the
-        user's terminal. Re-attributing requires a permitted app of our own,
-        and there's no programmatic way to grant notification permission to a
-        freshly-built AppleScript applet on modern macOS.
-      - DND filters this like any other notification. Sound bypasses DND.
+def _drop_message_file(label: str, context: str = "", cwd: str = "") -> None:
+    """Write a `.txt` file to Script Editor's iCloud folder so clicking the
+    notification's "Show" button surfaces the message.
+
+    Why: osascript notifications inherit Script Editor's bundle id, so the
+    click target is hardcoded to that folder. Rather than fight macOS, we
+    use the click target as a feature — the filename IS the message, and
+    the file body tells the user where to return and (optionally) why this
+    fired. Auto-prunes to MAX_MESSAGE_FILES so iCloud doesn't pile up.
     """
+    if not SE_DOCS_DIR.exists():
+        return
+    try:
+        # Sanitize: macOS forbids / and : in filenames; cap at 200 chars
+        safe_label = label.replace("/", "-").replace(":", "-").strip()[:200]
+        now = datetime.now()
+        fname = f"{MESSAGE_PREFIX}{safe_label} ({now.strftime('%H:%M')}).txt"
+        fpath = SE_DOCS_DIR / fname
+
+        term = os.environ.get("TERM_PROGRAM", "your terminal")
+        cwd_line = f"Working directory: {cwd}\n" if cwd else ""
+        context_block = f"\nContext:\n{context}\n" if context else ""
+        body = (
+            f"⏰ {label}\n"
+            f"{'=' * 50}\n\n"
+            f"Fired at: {now.strftime('%Y-%m-%d %H:%M:%S')}\n"
+            f"{cwd_line}"
+            f"\n→ Switch back to {term} to continue with your Claude session.\n"
+            f"{context_block}"
+        )
+        fpath.write_text(body)
+
+        # Prune old files we created (keep most recent MAX_MESSAGE_FILES)
+        ours = sorted(
+            (p for p in SE_DOCS_DIR.glob(f"{MESSAGE_PREFIX}*.txt") if p.is_file()),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+        for old in ours[MAX_MESSAGE_FILES:]:
+            old.unlink(missing_ok=True)
+    except OSError:
+        pass  # iCloud sync issue, permission, etc. — best-effort
+
+
+def fire_notification(label: str, context: str = "", cwd: str = "") -> None:
+    """Sound + visual notification. Sound is the reliable signal.
+
+    Visual is fired via raw osascript `display notification`, attributed to
+    Script Editor (the osascript host's bundle), which most users have
+    already granted notification permission. The click target is hardcoded
+    to Script Editor's iCloud Documents folder — we exploit that by writing
+    a message file there before firing, so clicking the notification surfaces
+    the actual message + return instructions + optional context.
+    """
+    _drop_message_file(label, context=context, cwd=cwd)
     safe = label.replace("\\", "\\\\").replace('"', '\\"')
     subprocess.run(
         ["osascript", "-e", f'display notification "{safe}" with title "Timer done"'],
@@ -137,6 +186,7 @@ def fire_notification(label: str) -> None:
 def cmd_worker(argv: list) -> int:
     duration_sec = int(argv[0])
     label = argv[1] if len(argv) > 1 else "Timer"
+    cwd = argv[2] if len(argv) > 2 else ""
     try:
         time.sleep(duration_sec)
     except KeyboardInterrupt:
@@ -153,7 +203,7 @@ def cmd_worker(argv: list) -> int:
                 check=False,
             )
 
-    fire_notification(label)
+    fire_notification(label, cwd=cwd)
 
     # Remove self from state
     state = load_state()
@@ -182,6 +232,8 @@ def cmd_list(args) -> int:
 def cmd_notify(args) -> int:
     """Fire sound + notification immediately. No countdown."""
     label = args.message or "Notification"
+    context = args.context or ""
+    cwd = os.getcwd()
     sound_file = "/System/Library/Sounds/Glass.aiff"
     if Path(sound_file).exists():
         subprocess.Popen(
@@ -189,7 +241,7 @@ def cmd_notify(args) -> int:
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-    fire_notification(label)
+    fire_notification(label, context=context, cwd=cwd)
     print(f"Notified: {label}")
     return 0
 
@@ -246,7 +298,12 @@ def main() -> int:
     p_cancel.set_defaults(func=cmd_cancel)
 
     p_notify = sub.add_parser("notify", help="fire sound + notification immediately (no countdown)")
-    p_notify.add_argument("message", help="message to display")
+    p_notify.add_argument("message", help="short message for the notification banner")
+    p_notify.add_argument(
+        "--context", "-c",
+        default="",
+        help="optional longer body for the click-to-show file (e.g. why this fired, what to do next)",
+    )
     p_notify.set_defaults(func=cmd_notify)
 
     args = p.parse_args()
